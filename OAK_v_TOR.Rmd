@@ -1,0 +1,122 @@
+---
+title: "OAK vs. TOR"
+output: html_document
+date: "2023-03-02"
+---
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300&family=Source+Sans+Pro&display=swap" rel="stylesheet">
+<style>
+
+body{
+font-family: 'Source Sans Pro', sans-serif;
+}
+
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages:
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(readr)
+library(baseballr)
+library(plotly)
+library(CalledStrike)
+library(knitr)
+library(kableExtra)
+library(patchwork)
+```
+
+Load data:
+```{r, include=FALSE}
+library(readr)
+OAK_TOR <- read_csv("C:/Users/jacki/Desktop/SABR/2023/Group A/Group A/Nelson 4-16-22/OAK at TOR 4-16-22.csv")
+View(OAK_TOR)
+
+# make variable for radius of baseball IN FEET
+b_rad <- 2.9/2/12
+```
+
+```{r, message=FALSE, warning=FALSE}
+# filter out columns with majority NAs, or variables not needed for this analysis
+clean <- OAK_TOR %>% 
+  dplyr::select(pitch_type:pitcher...8, description, zone:type, balls:plate_z, outs_when_up:inning_topbot, sz_top, sz_bot, effective_speed, release_spin_rate, game_pk, release_pos_y,
+                at_bat_number:post_bat_score, spin_axis:delta_run_exp)
+
+# filter to pitches of interest and add in sz_l and sz_r
+OAK_TOR_filtered <- clean %>% 
+  filter(description %in% c("ball", "blocked_ball", "called_strike")) %>% 
+  mutate(sz_l = -8.5/12, sz_r = 8.5/12)
+```
+
+Finding the incorrect calls:
+```{r, fig.align='center'}
+long <- OAK_TOR_filtered %>% 
+  mutate(new_sz_top = sz_top + b_rad,
+         new_sz_bot = sz_bot - b_rad,
+         new_sz_l = sz_l - b_rad,
+         new_sz_r = sz_r + b_rad)
+long <- long %>% 
+  dplyr::select(-c(game_year:pfx_z))
+
+calc_long <- long %>% 
+  mutate(true = case_when(plate_z > new_sz_top | plate_z < new_sz_bot ~ "ball",
+                          plate_x > new_sz_r | plate_x < new_sz_l ~ "ball",
+                          TRUE ~ "strike"))
+table(calc_long$true)
+
+graph <- calc_long %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = true)) +
+  geom_point() +
+  labs(title = "Call result from the code") +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+graph
+#ggplotly(graph)
+
+calc_long %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = type)) +
+  geom_point() +
+  labs(title = "Umpire's call") +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+```
+
+```{r}
+identify <- calc_long %>% 
+  mutate(call = case_when((type == "B" & true == "ball") ~ "pass",
+                          (type == "S" & true == "strike") ~ "pass",
+                          TRUE ~ "fail"))
+table(identify$call)
+```
+
+All pitches that were called_strike, ball, and blocked_ball
+```{r}
+fill <- which(identify$call == "fail")
+
+identify %>% 
+  dplyr::select(-des) %>% # took out this variable cause it was long
+  kable() %>% 
+  kable_styling("striped") %>% 
+  row_spec(fill, background = "skyblue") %>% 
+  scroll_box(height = "500px", width = "100%")
+```
+
+Only the ones identified as incorrect:
+```{r}
+incorrect <- identify %>% 
+  filter(call == "fail")
+incorrect %>% 
+  dplyr::select(-des) %>% # took out this variable cause it was long
+  kable() %>% 
+  kable_styling("striped") %>% 
+  scroll_box(height = "500px", width = "100%")
+```
+
+
+
