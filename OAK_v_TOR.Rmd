@@ -29,7 +29,7 @@ library(plotly)
 library(CalledStrike)
 library(knitr)
 library(kableExtra)
-library(patchwork)
+library(rpart)
 ```
 
 Load data:
@@ -45,8 +45,12 @@ b_rad <- 2.9/2/12
 ```{r, message=FALSE, warning=FALSE}
 # filter out columns with majority NAs, or variables not needed for this analysis
 clean <- OAK_TOR %>% 
-  dplyr::select(pitch_type:pitcher...8, description, zone:type, balls:plate_z, outs_when_up:inning_topbot, sz_top, sz_bot, effective_speed, release_spin_rate, game_pk, release_pos_y,
-                at_bat_number:post_bat_score, spin_axis:delta_run_exp)
+  dplyr::select(pitch_type:pitcher...8, description, zone:type, balls:plate_z, outs_when_up:inning_topbot, sz_top, sz_bot, effective_speed, release_spin_rate, 
+                game_pk, release_pos_y, at_bat_number:post_bat_score, spin_axis:delta_run_exp)
+
+# add an id for each observation
+clean <- clean %>% 
+  mutate(id = 1:277)
 
 # filter to pitches of interest and add in sz_l and sz_r
 OAK_TOR_filtered <- clean %>% 
@@ -118,5 +122,154 @@ incorrect %>%
   scroll_box(height = "500px", width = "100%")
 ```
 
+Finding counts of incorrect calls:
+```{r}
+incorrect %>% 
+  group_by(balls, strikes) %>% 
+  summarize(n())
+```
+Most of the incorrect calls were made during a 0-0 count
+
+## Predictive Modeling
+
+### Predicting Incorrect Calls
+```{r}
+model <- rpart(type ~ outs_when_up + inning + home_score + away_score + balls + strikes, data = identify)
+predictions <- as.data.frame(predict(model))
+predictions <- predictions %>% 
+  mutate(predict_call = case_when(B > S ~ "ball",
+                                  S > B ~ "strike"))
+table(predictions$predict_call)
+```
+This is really close to what the true amount of balls and strikes is
+
+Compare predicted call to actual call
+```{r}
+# add predictions to the data frame
+pred_m <- calc_long %>% 
+  mutate(predict_call = predictions$predict_call)
+
+# find the incorrect calls
+identify_pm <- pred_m %>% 
+  mutate(call = case_when((type == "B" & true == "ball") ~ "pass",
+                          (type == "S" & true == "strike") ~ "pass",
+                          TRUE ~ "fail"))
+table(identify_pm$call)
+```
+Still produces the same number of fail/pass
+
+### Predicting Individual Play Results
+
+**First draft:**
+```{r}
+clean_added <- clean %>% 
+  mutate(ump_call = case_when(id %in% incorrect$id ~ "incorrect",
+                              TRUE ~ "correct"))
+
+model_outcome <- rpart(description ~ ump_call + outs_when_up + inning + bat_score + fld_score + balls + strikes, data = clean_added)
+predictions_outcome <- as.data.frame(predict(model_outcome))
+
+# get the column names of the largest values
+predictions_outcome$highest<- (colnames(predictions_outcome)[max.col(predictions_outcome)])
+
+# add in to data frame
+clean_added <- clean_added %>% 
+  mutate(pred_outcome = predictions_outcome$highest)
+```
+
+```{r}
+fill2 <- which(clean_added$ump_call == "incorrect")
+clean_added %>% 
+  dplyr::select(-des) %>% 
+  kable %>% 
+  kable_styling("striped") %>% 
+  row_spec(fill2, background = "skyblue") %>% 
+  scroll_box(height = "500px")
+```
+
+
+**Updated version:**
+```{r, include=FALSE}
+correct <- OAK_TOR %>% 
+  mutate(id = 1:277)
+
+correct <- correct %>% 
+  filter(!(id %in% identify$id))
+
+correct <- correct %>% 
+  dplyr::select(pitch_type:pitcher...8, description, zone:type, balls:plate_z, outs_when_up:inning_topbot, sz_top, 
+                sz_bot, effective_speed, release_spin_rate, 
+                game_pk, release_pos_y, at_bat_number:post_bat_score, spin_axis:id)
+
+correct <- correct %>% 
+  mutate(sz_l = NA, sz_r = NA, new_sz_top = NA, new_sz_bot = NA, new_sz_l = NA, new_sz_r = NA,
+         true = description, call = "pass")
+
+correct <- correct %>% 
+  dplyr::select(-game_year, -pfx_x, -pfx_z)
+
+all_added <- rbind(identify, correct)
+```
+
+```{r}
+model_outcome2 <- rpart(description ~ call + true + outs_when_up + inning + bat_score + fld_score + balls + 
+                          strikes + plate_x + plate_z, 
+                       data = all_added)
+predictions_outcome2 <- as.data.frame(predict(model_outcome2))
+
+# get the column names of the largest values
+predictions_outcome2$highest<- (colnames(predictions_outcome2)[max.col(predictions_outcome2)])
+
+# add in to data frame
+all_added <- all_added %>% 
+  mutate(pred_outcome = predictions_outcome2$highest)
+```
+
+
+Full data with incorrect pitches highlighted:
+```{r}
+fill3 <- which(all_added$ump_call == "incorrect")
+all_added %>% 
+  dplyr::select(-des) %>% 
+  kable %>% 
+  kable_styling("striped") %>% 
+  row_spec(fill2, background = "skyblue") %>% 
+  scroll_box(height = "500px")
+```
+
+
+Just the incorrect pitches with how umpire called it and the predicted outcome:
+```{r}
+all_added %>% 
+  dplyr::select(id, description, pred_outcome) %>% 
+  kable %>% 
+  kable_styling("striped") %>% 
+  scroll_box(height = "500px")
+```
+
+
+
+### Visualization of Model Predictions {.tabset}
+
+#### All 
+```{r, fig.align='center'}
+all_added %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = pred_outcome)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+```
+
+#### Faceted
+```{r, fig.align='center'}
+all_added %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = pred_outcome)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1) +
+  facet_wrap(~pred_outcome)
+```
+
+### {-}
 
 
