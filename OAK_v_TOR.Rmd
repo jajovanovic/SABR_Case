@@ -58,7 +58,7 @@ OAK_TOR_filtered <- clean %>%
   mutate(sz_l = -8.5/12, sz_r = 8.5/12)
 ```
 
-Finding the incorrect calls:
+### Finding the incorrect calls:
 ```{r, fig.align='center'}
 long <- OAK_TOR_filtered %>% 
   mutate(new_sz_top = sz_top + b_rad,
@@ -233,7 +233,7 @@ all_added %>%
   dplyr::select(-des) %>% 
   kable %>% 
   kable_styling("striped") %>% 
-  row_spec(fill2, background = "skyblue") %>% 
+  row_spec(fill3, background = "skyblue") %>% 
   scroll_box(height = "500px")
 ```
 
@@ -272,5 +272,64 @@ all_added %>%
 ```
 
 ### {-}
+
+**Splitting this game into train and test data:**
+
+```{r, include=FALSE}
+train <- clean %>% 
+  filter(!(id %in% incorrect$id)) %>% 
+  mutate(ump_call = "correct")
+
+train_calc <- train %>% 
+  filter(id %in% calc_long$id)
+train_calc_b <- calc_long %>% 
+  filter(id %in% train$id)
+train_calc <- train_calc %>% 
+  mutate(true = train_calc_b$true)
+
+train_other <- train %>% 
+  filter(!(id %in% train_calc$id)) %>% 
+  mutate(true = description)
+train <- rbind(train_calc, train_other)
+
+test <- clean %>% 
+  filter(id %in% incorrect$id) %>% 
+  mutate(ump_call = "incorrect")
+```
+
+```{r}
+model_outcome3 <- rpart(description ~ outs_when_up + inning + bat_score + fld_score + balls + #true + ump_call +
+                          strikes + plate_x + plate_z, 
+                       data = train)
+predictions_outcome3 <- as.data.frame(predict(model_outcome3, newdata = test))
+
+# get the column names of the largest values
+predictions_outcome3$highest<- (colnames(predictions_outcome3)[max.col(predictions_outcome3)])
+
+# add in to data frame
+test$pred_outcome <- predictions_outcome3$highest
+```
+
+```{r}
+test %>% 
+  dplyr::select(id, description, balls, strikes, outs_when_up, inning, bat_score, fld_score, pred_outcome) %>% 
+  kable %>% 
+  kable_styling("striped") %>% 
+  scroll_box(height = "500px")
+```
+
+```{r, fig.align='center'}
+graph_3 <- test %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = pred_outcome)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+ggplotly(graph_3)
+```
+
+This is not a perfect model - it is not possible for an umpire to call a pitch (not hit) a foul, and some of the strikes are outside of the strike zone but they are close (since this is a generalized strike zone, not specific to each pitch, it is possible that the true strike zone is slightly different)
+
+
+
 
 

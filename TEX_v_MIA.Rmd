@@ -1,0 +1,245 @@
+---
+title: "TEX vs. MIA"
+output: html_document
+date: "2023-03-04"
+---
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300&family=Source+Sans+Pro&display=swap" rel="stylesheet">
+<style>
+
+body{
+font-family: 'Source Sans Pro', sans-serif;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages:
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(readr)
+library(baseballr)
+library(plotly)
+library(CalledStrike)
+library(knitr)
+library(kableExtra)
+library(rpart)
+```
+
+Load data:
+```{r, include=FALSE}
+library(readr)
+TEX_MIA <- read_csv("C:/Users/jacki/Desktop/SABR/2023/Group B/Group B/Libka 9-12-22/TEX at MIA 9-12-22.csv")
+View(TEX_MIA)
+
+# make variable for radius of baseball IN FEET
+b_rad <- 2.9/2/12
+```
+
+```{r, message=FALSE, warning=FALSE}
+# filter out columns with majority NAs, or variables not needed for this analysis
+clean_tm <- TEX_MIA %>% 
+  dplyr::select(pitch_type:pitcher...8, description, zone:type, balls, strikes, plate_x, plate_z, outs_when_up:inning_topbot, sz_top, sz_bot, effective_speed, 
+                release_spin_rate, game_pk, release_pos_y, at_bat_number:post_bat_score, spin_axis:delta_run_exp) %>% 
+  mutate(id = 1:273)
+
+# filter to pitches of interest and add in sz_l and sz_r
+TEX_MIA_filtered <- clean_tm %>% 
+  filter(description %in% c("ball", "blocked_ball", "called_strike")) %>% 
+  mutate(sz_l = -8.5/12, sz_r = 8.5/12)
+```
+
+### Finding the incorrect calls:
+```{r}
+long_tm <- TEX_MIA_filtered %>% 
+  mutate(new_sz_top = sz_top + b_rad,
+         new_sz_bot = sz_bot - b_rad,
+         new_sz_l = sz_l - b_rad,
+         new_sz_r = sz_r + b_rad)
+
+calc_long_tm <- long_tm %>% 
+  mutate(true = case_when(plate_z > new_sz_top | plate_z < new_sz_bot ~ "ball",
+                          plate_x > new_sz_r | plate_x < new_sz_l ~ "ball",
+                          TRUE ~ "strike"))
+table(calc_long_tm$true)
+```
+The predicted number of balls and strikes is very close to the actual number.
+
+```{r, fig.align='center'}
+calc_long_tm %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = true)) +
+  geom_point() +
+  labs(title = "Call result from the code") +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+
+calc_long_tm %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = type)) +
+  geom_point() +
+  labs(title = "Umpire's call") +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+```
+
+
+```{r}
+identify_tm <- calc_long_tm %>% 
+  mutate(call = case_when((type == "B" & true == "ball") ~ "pass",
+                          (type == "S" & true == "strike") ~ "pass",
+                          TRUE ~ "fail"))
+table(identify_tm$call)
+```
+
+All pitches that were called_strike, ball, and blocked_ball
+```{r}
+fill4 <- which(identify_tm$call == "fail")
+
+identify_tm %>% 
+  dplyr::select(-des) %>% # took out this variable cause it was long
+  kable() %>% 
+  kable_styling("striped") %>% 
+  row_spec(fill4, background = "skyblue") %>% 
+  scroll_box(height = "500px", width = "100%")
+```
+
+Only the ones identified as incorrect:
+```{r}
+incorrect_tm <- identify_tm %>% 
+  filter(call == "fail")
+incorrect_tm %>% 
+  dplyr::select(-des) %>% # took out this variable cause it was long
+  kable() %>% 
+  kable_styling("striped") %>% 
+  scroll_box(height = "500px", width = "100%")
+```
+
+Finding counts of incorrect calls:
+```{r}
+incorrect_tm %>% 
+  group_by(balls, strikes) %>% 
+  summarize(n())
+```
+Most of the incorrect calls were made during a 0-0 count, but the spread is pretty even.
+
+## Predictive Modeling
+
+### Predicting Incorrect Calls
+
+```{r}
+model_tm <- rpart(type ~ outs_when_up + inning + home_score + away_score + balls + strikes, data = identify_tm)
+predictions_tm <- as.data.frame(predict(model_tm))
+predictions_tm <- predictions_tm %>% 
+  mutate(predict_call = case_when(B > S ~ "ball",
+                                  S > B ~ "strike"))
+table(predictions_tm$predict_call)
+```
+Less accurate than previous way
+
+Compare predicted call to actual call
+```{r}
+# add predictions to the data frame
+pred_m_tm <- calc_long_tm %>% 
+  mutate(predict_call = predictions_tm$predict_call)
+
+# find the incorrect calls
+identify_pm_tm <- pred_m_tm %>% 
+  mutate(call = case_when((type == "B" & true == "ball") ~ "pass",
+                          (type == "S" & true == "strike") ~ "pass",
+                          TRUE ~ "fail"))
+table(identify_pm_tm$call)
+```
+
+### Predicting Individual Play Results
+
+```{r, include=FALSE}
+correct_tm <- TEX_MIA %>% 
+  dplyr::select(pitch_type:pitcher...8, description, zone:type, balls, strikes, plate_x, plate_z, outs_when_up:inning_topbot, sz_top, sz_bot, effective_speed, 
+                release_spin_rate, game_pk, release_pos_y, at_bat_number:post_bat_score, spin_axis:delta_run_exp) %>% 
+  mutate(id = 1:273)
+
+correct_tm <- correct_tm %>% 
+  filter(!(id %in% identify_tm$id)) %>% 
+  mutate(sz_l = NA, sz_r = NA, new_sz_top = NA, new_sz_bot = NA, new_sz_l = NA, new_sz_r = NA,
+         true = description, call = "pass")
+
+all_added_tm <- rbind(identify_tm, correct_tm)
+```
+
+```{r}
+model_outcome_tm <- rpart(description ~ call + true + outs_when_up + inning + bat_score + fld_score + balls + 
+                          strikes + plate_x + plate_z, data = all_added_tm)
+predictions_outcome_tm <- as.data.frame(predict(model_outcome_tm))
+
+# get the column names of the largest values
+predictions_outcome_tm$highest<- (colnames(predictions_outcome_tm)[max.col(predictions_outcome_tm)])
+
+# add in to data frame
+all_added_tm <- all_added_tm %>% 
+  mutate(pred_outcome = predictions_outcome_tm$highest)
+```
+
+
+Full data with incorrect pitches highlighted:
+```{r}
+fill5 <- which(all_added_tm$call == "fail")
+all_added_tm %>% 
+  dplyr::select(-des) %>% 
+  kable %>% 
+  kable_styling("striped") %>% 
+  row_spec(fill5, background = "skyblue") %>% 
+  scroll_box(height = "500px")
+```
+
+Just the incorrect pitches and the predicted outcome:
+
+```{r}
+all_added_tm %>% 
+  filter(call == "fail") %>% 
+  dplyr::select(id, description, pred_outcome) %>% 
+  kable %>% 
+  kable_styling("striped") 
+```
+
+**Splitting this game into train and test data:**
+
+This method does NOT work well for this data frame.
+
+```{r, include=FALSE}
+train_tm <- clean_tm %>% 
+  filter(!(id %in% incorrect_tm$id)) %>% 
+  mutate(ump_call = "correct")
+
+train_calc_tm <- train_tm %>% 
+  filter(id %in% calc_long_tm$id)
+train_calc_c <- calc_long_tm %>% 
+  filter(id %in% train_tm$id)
+train_calc_tm <- train_calc_tm %>% 
+  mutate(true = train_calc_c$true)
+
+train_other_tm <- train_tm %>% 
+  filter(!(id %in% train_calc_tm$id)) %>% 
+  mutate(true = description)
+train_tm <- rbind(train_calc_tm, train_other_tm)
+
+test_tm <- clean_tm %>% 
+  filter(id %in% incorrect_tm$id) %>% 
+  mutate(ump_call = "incorrect")
+```
+
+```{r, include=FALSE}
+model_outcome_tm2 <- rpart(description ~ outs_when_up + inning + bat_score + fld_score + balls + #true + ump_call +
+                          strikes + plate_x + plate_z, data = train_tm)
+predictions_outcome_tm2 <- as.data.frame(predict(model_outcome_tm2, newdata = test_tm))
+
+# get the column names of the largest values
+predictions_outcome_tm2$highest<- (colnames(predictions_outcome_tm2)[max.col(predictions_outcome_tm2)])
+
+# add in to data frame
+test_tm$pred_outcome <- predictions_outcome_tm2$highest
+```
+
