@@ -30,6 +30,7 @@ library(CalledStrike)
 library(knitr)
 library(kableExtra)
 library(rpart)
+library(patchwork)
 ```
 
 Load data:
@@ -58,6 +59,27 @@ OAK_TOR_filtered <- clean %>%
   mutate(sz_l = -8.5/12, sz_r = 8.5/12)
 ```
 
+**Score:**
+```{r, fig.align='center'}
+ot_scores <- OAK_TOR %>% 
+  group_by(inning) %>% 
+  summarise(TOR = max(home_score),
+            OAK = max(away_score)) %>% 
+  pivot_longer(cols = TOR:OAK,
+               names_to = "team", 
+               values_to = "score")
+ot_scores %>% 
+  ggplot(aes(x = inning, y = score, fill = team)) +
+  geom_col(alpha = 0.8, position = "dodge") +
+  labs(title = "Oakland Athletics vs. Toronto Blue Jays", 
+       subtitle = "April 16, 2022",
+       x = "Inning", y = "Runs Scored", fill = "Team") +
+  theme_bw() +
+  scale_x_continuous(breaks = 1:9) +
+  scale_fill_manual(values = c("darkblue", "springgreen4"))
+```
+
+
 ### Finding the incorrect calls:
 ```{r, fig.align='center'}
 long <- OAK_TOR_filtered %>% 
@@ -80,16 +102,18 @@ graph <- calc_long %>%
   labs(title = "Call result from the code") +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
-graph
 #ggplotly(graph)
 
-calc_long %>% 
+graph_2 <- calc_long %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = type)) +
   geom_point() +
   labs(title = "Umpire's call") +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
+
+graph + graph_2
 ```
+From this side-by-side comparison we can see the code is better at identifying strikes in the horizontal plane, with a few pitches above and below the zone being called strikes. The umpire is the opposite; their strength is the vertical plane and calls many incorrect strikes that were too wide.
 
 ```{r}
 identify <- calc_long %>% 
@@ -121,6 +145,16 @@ incorrect %>%
   kable_styling("striped") %>% 
   scroll_box(height = "500px", width = "100%")
 ```
+
+```{r, fig.align='center'}
+incorrect %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = type)) +
+  geom_point() +
+  labs(title = "Incorrect Calls", subtitle = "Colored by How the Umpire Called It") +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+```
+
 
 Finding counts of incorrect calls:
 ```{r}
@@ -329,7 +363,19 @@ ggplotly(graph_3)
 
 This is not a perfect model - it is not possible for an umpire to call a pitch (not hit) a foul, and some of the strikes are outside of the strike zone but they are close (since this is a generalized strike zone, not specific to each pitch, it is possible that the true strike zone is slightly different)
 
+### Further Application of These Results
+#### Common Results of Each Count
+The most frequent of each group is highlighted. This is looking at all of the data _except_ the identified incorrect calls. A couple of them were tied for most frequent (those are specified below the table).
+```{r, message=FALSE, warning=FALSE}
+train %>% 
+  group_by(balls, strikes, description) %>% 
+  summarize(n()) %>% 
+  kable %>% 
+  kable_styling("striped") %>% 
+  row_spec(c(1, 8, 14, 18, 24, 27, 29, 34, 38, 46, 47, 50, 55, 59), background = "skyblue") %>% 
+  scroll_box(height = "500px")
+```
 
+1-1 is tied between ball and hit_into_play for most frequently occurred. 2-2 tied between hit_into_play and swinging_strike. The majority of the time "ball" is the top result until you get to the 2-2 count and everything following that. 
 
-
-
+According to the predictive modeling, **17 of the incorrect calls happened during the top of the inning (while Tornoto was pitching), and 12 of the calls happened in the bottom of the inning (while Oakland was pitching).**

@@ -54,6 +54,26 @@ TEX_MIA_filtered <- clean_tm %>%
   mutate(sz_l = -8.5/12, sz_r = 8.5/12)
 ```
 
+**Score:**
+```{r, fig.align='center'}
+tm_scores <- TEX_MIA %>% 
+  group_by(inning) %>% 
+  summarise(MIA = max(home_score),
+            TEX = max(away_score)) %>% 
+  pivot_longer(cols = MIA:TEX,
+               names_to = "team", 
+               values_to = "score")
+tm_scores %>% 
+  ggplot(aes(x = inning, y = score, fill = team)) +
+  geom_col(alpha = 0.8, position = "dodge") +
+  labs(title = "Texas Rangers vs. Miami Marlins", 
+       subtitle = "September 12, 2022",
+       x = "Inning", y = "Runs Scored", fill = "Team") +
+  theme_bw() +
+  scale_x_continuous(breaks = 1:9) +
+  scale_fill_manual(values = c("deepskyblue", "red2"))
+```
+
 ### Finding the incorrect calls:
 ```{r}
 long_tm <- TEX_MIA_filtered %>% 
@@ -117,6 +137,16 @@ incorrect_tm %>%
   kable_styling("striped") %>% 
   scroll_box(height = "500px", width = "100%")
 ```
+
+```{r, fig.align='center'}
+incorrect_tm %>% 
+  ggplot(aes(x = plate_x, y = plate_z, color = type)) +
+  geom_point() +
+  labs(title = "Incorrect Calls", subtitle = "Colored by How the Umpire Called It") +
+  theme_bw() +
+  add_zone() + coord_fixed(ratio = 1)
+```
+
 
 Finding counts of incorrect calls:
 ```{r}
@@ -184,7 +214,7 @@ all_added_tm <- all_added_tm %>%
 ```
 
 
-Full data with incorrect pitches highlighted:
+Full data with incorrect calls highlighted:
 ```{r}
 fill5 <- which(all_added_tm$call == "fail")
 all_added_tm %>% 
@@ -195,7 +225,7 @@ all_added_tm %>%
   scroll_box(height = "500px")
 ```
 
-Just the incorrect pitches and the predicted outcome:
+Just the incorrect calls and the predicted outcome:
 
 ```{r}
 all_added_tm %>% 
@@ -242,4 +272,23 @@ predictions_outcome_tm2$highest<- (colnames(predictions_outcome_tm2)[max.col(pre
 # add in to data frame
 test_tm$pred_outcome <- predictions_outcome_tm2$highest
 ```
+
+### Further Application of These Results
+#### Common Results of Each Count
+The most frequent of each group is highlighted. This is looking at all of the data _except_ the identified incorrect calls. A couple of them were tied for most frequent (those are specified below the table).
+```{r, message=FALSE, warning=FALSE}
+all_added_tm %>% 
+  filter(call == "pass") %>% 
+  group_by(balls, strikes, description) %>% 
+  summarize(n()) %>% 
+  kable %>% 
+  kable_styling("striped") %>% 
+  row_spec(c(1, 15, 17, 26, 28, 35, 39:41, 43, 51, 55:56, 57:58, 60:62), background = "skyblue") %>% 
+  scroll_box(height = "500px")
+```
+
+2-0 is tied between ball, called_strike, and foul. There are only two instances of a 3-0 count in this game, one resulted in called_strike the other foul. 3-1 is tied between ball and foul. 3-2 is tied between ball, foul, and hit_into_play.
+
+According to the predictive modeling, **10 of the incorrect calls happened during the top of the inning (while Miami was pitching), and 1 call happened in the bottom of the inning (while Texas was pitching).**
+
 
