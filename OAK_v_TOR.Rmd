@@ -76,7 +76,7 @@ ot_scores %>%
        x = "Inning", y = "Runs Scored", fill = "Team") +
   theme_bw() +
   scale_x_continuous(breaks = 1:9) +
-  scale_fill_manual(values = c("darkblue", "springgreen4"))
+  scale_fill_manual(values = c("springgreen4", "darkblue"))
 ```
 
 
@@ -98,7 +98,7 @@ table(calc_long$true)
 
 graph <- calc_long %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = true)) +
-  geom_point() +
+  geom_point(alpha = .8) +
   labs(title = "Call result from the code") +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
@@ -106,7 +106,7 @@ graph <- calc_long %>%
 
 graph_2 <- calc_long %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = type)) +
-  geom_point() +
+  geom_point(alpha = .8) +
   labs(title = "Umpire's call") +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
@@ -149,9 +149,10 @@ incorrect %>%
 ```{r, fig.align='center'}
 incorrect %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = type)) +
-  geom_point() +
+  geom_point(alpha = 0.8) +
   labs(title = "Incorrect Calls", subtitle = "Colored by How the Umpire Called It") +
   theme_bw() +
+  scale_color_manual(values = c("navyblue", "slategray")) +
   add_zone() + coord_fixed(ratio = 1)
 ```
 
@@ -355,7 +356,7 @@ test %>%
 ```{r, fig.align='center'}
 graph_3 <- test %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = pred_outcome)) +
-  geom_point(alpha = 0.5) +
+  geom_point(alpha = 0.8) +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
 ggplotly(graph_3)

@@ -93,14 +93,14 @@ The predicted number of balls and strikes is very close to the actual number.
 ```{r, fig.align='center'}
 calc_long_tm %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = true)) +
-  geom_point() +
+  geom_point(alpha = .8) +
   labs(title = "Call result from the code") +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
 
 calc_long_tm %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = type)) +
-  geom_point() +
+  geom_point(alpha = .8) +
   labs(title = "Umpire's call") +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
@@ -141,7 +141,7 @@ incorrect_tm %>%
 ```{r, fig.align='center'}
 incorrect_tm %>% 
   ggplot(aes(x = plate_x, y = plate_z, color = type)) +
-  geom_point() +
+  geom_point(alpha = .8) +
   labs(title = "Incorrect Calls", subtitle = "Colored by How the Umpire Called It") +
   theme_bw() +
   add_zone() + coord_fixed(ratio = 1)
