@@ -118,7 +118,65 @@ payroll %>%
   theme(legend.position = "false") +
   facet_wrap(~season)
 ```
+## Standings
 
+### AL
+
+**The first table is standings the day before the game of interest. The second is the standings on 9/12.**
+
+```{r}
+standings11_al <- bref_standings_on_date(date = "2022-09-11", division = "AL Overall")
+standings12_al <- bref_standings_on_date(date = "2022-09-12", division = "AL Overall")
+
+#bref_standings_on_date(date = "2022-09-11", division = "NL Overall")
+
+# add row to show ranks
+standings11_al <- standings11_al %>% 
+  mutate(rank = 1:15) %>% 
+  dplyr::select(rank, Tm:`pythW-L%`)
+standings12_al <- standings12_al %>% 
+  mutate(rank = 1:15) %>% 
+  dplyr::select(rank, Tm:`pythW-L%`)
+
+kable(standings11_al, caption = "AL - Day Before") %>% 
+  kable_styling("striped") %>% 
+  row_spec(12, background = "skyblue") %>% 
+  row_spec(5, background = "lavender") %>% 
+  row_spec(15, background = "gainsboro")
+kable(standings12_al, caption = "AL - On 9/12") %>% 
+  kable_styling("striped") %>% 
+  row_spec(11, background = "skyblue") %>% 
+  row_spec(3, background = "lavender") %>% 
+  row_spec(15, background = "gainsboro")
+```
+
+Rangers went up 1 in the rankings. Toronto went up 2. Oakland stayed at 15.
+
+### NL
+
+**The first table is standings the day before the game of interest. The second is the standings on 9/12.**
+
+```{r}
+standings11_nl <- bref_standings_on_date(date = "2022-09-11", division = "NL Overall")
+standings12_nl <- bref_standings_on_date(date = "2022-09-12", division = "NL Overall")
+
+# add row to show ranks
+standings11_nl <- standings11_nl %>% 
+  mutate(rank = 1:15) %>% 
+  dplyr::select(rank, Tm:`pythW-L%`)
+standings12_nl <- standings12_nl %>% 
+  mutate(rank = 1:15) %>% 
+  dplyr::select(rank, Tm:`pythW-L%`)
+
+kable(standings11_nl, caption = "AL - Day Before") %>% 
+  kable_styling("striped") %>% 
+  row_spec(12, background = "skyblue") 
+kable(standings12_nl, caption = "AL - On 9/12") %>% 
+  kable_styling("striped") %>% 
+  row_spec(12, background = "skyblue") 
+```
+
+MIA stayed the same in the rankings
 
 ## Trevor Rogers
 
@@ -150,4 +208,33 @@ rogers %>%
 
 I could make this into two separate bar graphs if you'd like. They can't be on the same one since the scales are so different, and one of the K/BB values is much either than the others so it would make it hard to see all the values without using a transformation (like log). 
 
+## Postseason
+
+```{r}
+post2022 <- mlb_schedule_postseason(season = 2022) %>%
+  dplyr::select(date:game_pk, game_type, season, official_date, description, teams_away_team_id, teams_away_team_name, teams_away_score, teams_home_team_id,
+                teams_home_team_name, teams_home_score)
+post2021 <- mlb_schedule_postseason(season = 2021) %>%
+  dplyr::select(date:game_pk, game_type, season, official_date, description, teams_away_team_id, teams_away_team_name, teams_away_score, teams_home_team_id,
+                teams_home_team_name, teams_home_score)
+post2020 <- mlb_schedule_postseason(season = 2020) %>%
+  dplyr::select(date:game_pk, game_type, season, official_date, description, teams_away_team_id, teams_away_team_name, teams_away_score, teams_home_team_id,
+                teams_home_team_name, teams_home_score)
+post2019 <- mlb_schedule_postseason(season = 2019) %>%
+  dplyr::select(date:game_pk, game_type, season, official_date, description, teams_away_team_id, teams_away_team_name, teams_away_score, teams_home_team_id,
+                teams_home_team_name, teams_home_score)
+post2018 <- mlb_schedule_postseason(season = 2018) %>%
+  dplyr::select(date:game_pk, game_type, season, official_date, description, teams_away_team_id, teams_away_team_name, teams_away_score, teams_home_team_id,
+                teams_home_team_name, teams_home_score)
+post5 <- rbind(post2022, post2021, post2020, post2019, post2018)
+```
+
+```{r}
+# rangers
+# post5 %>% 
+#   filter(teams_away_team_id == 140 | teams_home_team_id == 140) %>% View()
+# # blue jays
+# post5 %>% 
+#   filter(teams_away_team_id == 141 | teams_home_team_id == 141) %>% View()
+```
 
