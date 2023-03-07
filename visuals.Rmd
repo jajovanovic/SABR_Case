@@ -42,13 +42,13 @@ win_loss_ot <- data.frame(team = c("OAK", "OAK", "TOR", "TOR"),
 
 win_loss_ot %>% 
   group_by(team) %>% 
-  ggplot(aes(x = factor(team), y = record, fill = result)) +
+  ggplot(aes(x = factor(result), y = record, fill = team)) +
   geom_col(position = "dodge") + 
   geom_text(aes(label = record), vjust = -.5, position = position_dodge(.9), family = "serif") +
   labs(x = "Team", y = "Record", fill = "Game Result") +
   #ylim(0, 110) +
   theme_bw() +
-  scale_fill_manual(values = c("navyblue", "cornflowerblue")) +
+  scale_fill_manual(values = c("springgreen4", "darkblue")) +
   theme(text=element_text(family = "serif")) 
 ```
 
